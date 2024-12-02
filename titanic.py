@@ -1,5 +1,12 @@
+from fileinput import close
+
 import pandas as pd
 import matplotlib.pyplot as plt
+import openpyxl
+import mysql.connector
+
+conn = mysql.connector.connect(host='localhost', user='root', passwd='123456789', database='titanic')
+cursor = conn.cursor()
 
 #Leitura e Exploração dos dados
 df = pd.read_csv('titanic.csv')
@@ -106,24 +113,122 @@ plt.ylabel('Média de Tarifa', fontsize=12)
 plt.xticks(rotation=0)
 plt.grid(axis='y', linestyle='--', alpha=0.7)
 plt.tight_layout()
+plt.savefig('grafico_sobreviventes.png')
 plt.show()
 
 
 # Correlação entre Variáveis: Utilizar gráficos de dispersão (scatter plots) para analisar a correlação entre Age, Fare e Survived
 
-# DistribuiçãodasVariáveis: CriarhistogramasparavisualizaradistribuiçãodeAge, Fare, eSurvived
+colors = df_filled['Survived'].map({0: 'red', 1: 'green'})
+plt.scatter(df_filled['Age'], df_filled['Fare'], c=colors, alpha=0.6, edgecolor='k')
+plt.title('Correlação entre Idade, Tarifa e Sobrevivência')
+plt.xlabel('Idade')
+plt.ylabel('Tarifa')
+plt.grid(linestyle='--', alpha=0.7)
+plt.savefig('dispersao_idade_tarifa_sobrevivencia.png')
+plt.show()
+
+# Distribuição das Variáveis: Criar histogramas para visualizar a distribuição de Age, Fare, e Survived
+media_idade = df_filled['Age'].mean()
+plt.figure(figsize=(8, 6))
+plt.hist(df_filled['Age'], bins=20, color='skyblue', edgecolor='black', alpha=0.7, label='Idade')
+plt.axvline(media_idade, color='red', linestyle='dashed', linewidth=2, label=f'Média = {media_idade:.2f}')
+plt.title('Distribuição de Idades')
+plt.xlabel('Idade')
+plt.ylabel('Frequência')
+plt.legend(fontsize=12)
+plt.savefig('distribuicao_idade.png')
+plt.show()
+
+media_tarifa = df_filled['Fare'].mean()
+plt.figure(figsize=(8, 6))
+plt.hist(df_filled['Fare'], bins=20, color='green', edgecolor='black', alpha=0.7, label='Tarifa')
+plt.axvline(media_tarifa, color='red', linestyle='dashed', linewidth=2, label=f'Média = {media_tarifa:.2f}')
+plt.title('Distribuição de Tarifas')
+plt.xlabel('Tarifa')
+plt.ylabel('Frequência')
+plt.legend(fontsize=12)
+plt.savefig('distribuicao_tarifa.png')
+plt.show()
+
+nao_sobreviventes = df_filled[df_filled['Survived'] == 0]
+sobreviventes = df_filled[df_filled['Survived'] == 1]
+plt.figure(figsize=(8, 6))
+plt.hist([nao_sobreviventes['Survived'], sobreviventes['Survived']],
+         bins=[0, 1],
+         color=['red', 'green'],
+         edgecolor='black',
+         alpha=0.7,
+         label=['Não Sobreviveu', 'Sobreviveu'])
+plt.title('Distribuição de Sobrevivência')
+plt.xlabel('Sobrevivência (0 = Não Sobreviveu, 1 = Sobreviveu)')
+plt.ylabel('Frequência')
+plt.xticks([0.30,0.70], ['Não Sobreviveu', 'Sobreviveu'])
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.savefig('distribuicao_sobrevivencia.png')
+plt.show()
 
 #Exportação dos resultados
 #Guardar o DataFrame atualizado num novo ficheiro Excel, incluindo todas as colunas novas criadas durante a análise
+
+df_filled.to_excel('relatorio_titanic.xlsx', index=False, sheet_name='Dados Atualizados')
+print("Ficheiro Excel criado: relatorio_titanic.xlsx")
+
 #Exportar também gráficos relevantes para um relatório final
 
 
 #Armazenamento numa Base de Dados
 #Criar uma tabela onde cada coluna corresponde a uma das variáveis no conjunto de dados
-# Inserir o conjunto de dados na tabela criada, assegurando que a nova coluna Idade_Milissegundos esteja formatada corretamente
+#Inserir o conjunto de dados na tabela criada, assegurando que a nova coluna Idade_Milissegundos esteja formatada corretamente
+relatorio_titanic = 'relatorio_titanic.xlsx'
+df_dados = pd.read_excel(relatorio_titanic)
 
+cursor.execute('CREATE TABLE IF NOT EXISTS dados(PassengerId INT PRIMARY KEY,'
+               'Survived BIT, '
+               'Pclass INT, '
+               'Name VARCHAR(100), '
+               'Sex VARCHAR(10), '
+               'Age INT, '
+               'SibSp INT, '
+               'Parch INT, '
+               'Ticket VARCHAR(50), '
+               'Fare FLOAT, '
+               'Cabin VARCHAR(50), '
+               'Embarked VARCHAR(1), '
+               'Idade_Milissegundos BIGINT(50))')
+
+query = '''INSERT INTO dados(PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked, Idade_Milissegundos) 
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+
+try:
+    for _, row in df_dados.iterrows():
+        values = (row['PassengerId'], row['Survived'], row['Pclass'], row['Name'], row['Sex'], row['Age'], row['SibSp'], row['Parch'], row['Ticket'], row['Fare'], row['Cabin'], row['Embarked'], row['Idade_Milissegundos'])
+        cursor.execute(query, values)
+except mysql.connector.Error as e:
+    print(f'Erro: {e}')
+
+conn.commit()
+cursor.close()
+conn.close()
 
 #Análise adicional
+#Sobreviventes família a bordo
 
+familia_a_bordo = df_filled.groupby('SibSp')['Survived'].count()
+plt.figure(figsize=(10, 6))
+label_barras = familia_a_bordo.plot(kind='bar', figsize=(12, 6), stacked=True, color=['salmon', 'skyblue'])
+for i in label_barras.patches:
+    label_barras.annotate(f'{int(i.get_height())}',  # Valor com duas casas decimais
+                (i.get_x() + i.get_width() / 2, i.get_height()),  # Localização do rótulo
+                ha='center', va='bottom',  # Alinhamento horizontal e vertical
+                fontsize=12, color='black', fontweight='bold')
+plt.title('Sobrevivência de Passageiros com Irmãos/Cônjuges a Bordo')
+plt.xlabel('Número de Irmãos/Cônjuges')
+plt.ylabel('Número de sobreviventes')
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.savefig('sobrevivencia_sibsp.png')
+plt.show()
 
 
