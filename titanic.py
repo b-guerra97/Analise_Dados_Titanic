@@ -231,4 +231,17 @@ plt.tight_layout()
 plt.savefig('sobrevivencia_sibsp.png')
 plt.show()
 
-
+#Sobreviventes crianças
+criancas = df_filled[df_filled['Age'] < 18]
+sobrevivencia_criancas = criancas['Survived'].sum()
+nao_sobrevivencia_criancas = len(criancas) - sobrevivencia_criancas
+labels = ['Sobreviventes', 'Não Sobreviventes']
+sizes = [sobrevivencia_criancas, nao_sobrevivencia_criancas]
+colors = ['darkgreen', 'darkred']
+plt.figure(figsize=(8, 8))
+plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, textprops={'fontsize': 20, 'color': 'darkgrey'})
+plt.title('Sobrevivência de Crianças a Bordo')
+plt.axis('equal')
+plt.tight_layout()
+plt.savefig('sobrevivencia_criancas.png')
+plt.show()
